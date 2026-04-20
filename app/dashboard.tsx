@@ -2,6 +2,7 @@ import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
   Alert,
+  Modal,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -18,6 +19,9 @@ export default function DashboardScreen() {
   const [user, setUser] = useState<any>(null);
   const [stats, setStats] = useState<any>(null);
   const [lessons, setLessons] = useState<any[]>([]);
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [showNotifications, setShowNotifications] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -27,24 +31,43 @@ export default function DashboardScreen() {
     try {
       const userRes = await api.get("/user");
       setUser(userRes.data);
-      
-      // Fetch quiz stats
+
       try {
         const statsRes = await api.get("/quiz-stats");
         setStats(statsRes.data);
       } catch (e) {
         console.log("Stats error:", e);
       }
-      
-      // Fetch recent lessons
+
       try {
         const lessonsRes = await api.get("/lessons");
         setLessons(lessonsRes.data.slice(0, 3));
       } catch (e) {
         console.log("Lessons error:", e);
       }
+
+      try {
+        const notifRes = await api.get("/notifications");
+        setNotifications(notifRes.data.notifications);
+        setUnreadCount(notifRes.data.unread_count);
+      } catch (e) {
+        console.log("Notifications error:", e);
+      }
     } catch (error) {
       console.log("Error fetching data:", error);
+    }
+  };
+
+  const handleOpenNotifications = async () => {
+    setShowNotifications(true);
+    if (unreadCount > 0) {
+      try {
+        await api.patch("/notifications/read-all");
+        setUnreadCount(0);
+        setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+      } catch (e) {
+        console.log("Mark read error:", e);
+      }
     }
   };
 
@@ -76,10 +99,7 @@ export default function DashboardScreen() {
   };
 
   const handleSubjectPress = (subject: string) => {
-    router.push({
-      pathname: "/lessons",
-      params: { subject },
-    });
+    router.push({ pathname: "/lessons", params: { subject } });
   };
 
   const SUBJECT_COLORS: any = {
@@ -103,6 +123,13 @@ export default function DashboardScreen() {
     { label: "Filipino", icon: "🇵🇭", color: "#F4511E" },
   ];
 
+  const getNotifIcon = (type: string) => {
+    if (type === "message") return "💬";
+    if (type === "quiz") return "📝";
+    if (type === "mentor_assigned") return "🧑‍🏫";
+    return "🔔";
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
@@ -112,10 +139,16 @@ export default function DashboardScreen() {
           <Text style={styles.headerSub}>{getGreeting()}!</Text>
         </View>
         <View style={styles.headerRight}>
-          <View style={styles.notifBtn}>
+          <TouchableOpacity style={styles.notifBtn} onPress={handleOpenNotifications}>
             <Text style={styles.notifIcon}>🔔</Text>
-            <View style={styles.notifDot} />
-          </View>
+            {unreadCount > 0 && (
+              <View style={styles.notifBadge}>
+                <Text style={styles.notifBadgeText}>
+                  {unreadCount > 9 ? "9+" : unreadCount}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
           <TouchableOpacity
             style={styles.avatar}
             onPress={() => router.push("/profile")}
@@ -124,6 +157,50 @@ export default function DashboardScreen() {
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* Notification Modal */}
+      <Modal
+        visible={showNotifications}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowNotifications(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>🔔 Notifications</Text>
+              <TouchableOpacity onPress={() => setShowNotifications(false)}>
+                <Text style={styles.modalClose}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView>
+              {notifications.length === 0 ? (
+                <View style={styles.emptyNotif}>
+                  <Text style={styles.emptyNotifIcon}>🔕</Text>
+                  <Text style={styles.emptyNotifText}>No notifications yet</Text>
+                </View>
+              ) : (
+                notifications.map((n) => (
+                  <View
+                    key={n.id}
+                    style={[styles.notifItem, !n.is_read && styles.notifItemUnread]}
+                  >
+                    <Text style={styles.notifItemIcon}>{getNotifIcon(n.type)}</Text>
+                    <View style={styles.notifItemContent}>
+                      <Text style={styles.notifItemTitle}>{n.title}</Text>
+                      <Text style={styles.notifItemBody}>{n.body}</Text>
+                      <Text style={styles.notifItemTime}>
+                        {new Date(n.created_at).toLocaleDateString()}
+                      </Text>
+                    </View>
+                    {!n.is_read && <View style={styles.notifUnreadDot} />}
+                  </View>
+                ))
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
 
       <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* Progress Banner */}
@@ -187,7 +264,7 @@ export default function DashboardScreen() {
             style={styles.lessonItem}
             onPress={() => router.push({ pathname: "/lesson-detail", params: { id: l.id } })}
           >
-            <View style={[styles.lessonIcon, { backgroundColor: SUBJECT_COLORS[l.subject] + "20" }]}>
+            <View style={[styles.lessonIcon, { backgroundColor: (SUBJECT_COLORS[l.subject] || "#1A73E8") + "20" }]}>
               <Text style={styles.lessonIconText}>{SUBJECT_ICONS[l.subject] || "📚"}</Text>
             </View>
             <View style={styles.lessonInfo}>
@@ -198,7 +275,7 @@ export default function DashboardScreen() {
           </TouchableOpacity>
         ))}
 
-        {/* Upcoming Quiz */}
+        {/* Quiz Card */}
         <TouchableOpacity style={styles.quizCard} onPress={() => router.push("/quizzes")}>
           <Text style={styles.quizLabel}>📅 Quiz History</Text>
           <Text style={styles.quizTitle}>
@@ -250,7 +327,6 @@ export default function DashboardScreen() {
       {/* Bottom Nav */}
       <View style={[styles.bottomNav, { paddingBottom: insets.bottom + 10 }]}>
         {[
-          // REPLACE WITH:
           { icon: "🏠", label: "Home" },
           { icon: "📚", label: "Lessons" },
           { icon: "📝", label: "Quizzes" },
@@ -272,21 +348,14 @@ export default function DashboardScreen() {
                       : undefined
             }
           >
-            <Text
-              style={[
-                styles.navIcon,
-                n.label === "Logout" && { color: "#E53935" },
-              ]}
-            >
+            <Text style={[styles.navIcon, n.label === "Logout" && { color: "#E53935" }]}>
               {n.icon}
             </Text>
-            <Text
-              style={[
-                styles.navLabel,
-                n.label === "Home" && styles.navLabelActive,
-                n.label === "Logout" && styles.navLabelLogout,
-              ]}
-            >
+            <Text style={[
+              styles.navLabel,
+              n.label === "Home" && styles.navLabelActive,
+              n.label === "Logout" && styles.navLabelLogout,
+            ]}>
               {n.label}
             </Text>
           </TouchableOpacity>
@@ -320,15 +389,19 @@ const styles = StyleSheet.create({
     position: "relative",
   },
   notifIcon: { fontSize: 17 },
-  notifDot: {
+  notifBadge: {
     position: "absolute",
-    top: 4,
-    right: 4,
-    width: 8,
-    height: 8,
-    backgroundColor: "#FFD93D",
-    borderRadius: 4,
+    top: -2,
+    right: -2,
+    backgroundColor: "#FF4757",
+    borderRadius: 99,
+    minWidth: 16,
+    height: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 3,
   },
+  notifBadgeText: { fontSize: 9, fontWeight: "800", color: "white" },
   avatar: {
     width: 36,
     height: 36,
@@ -339,6 +412,54 @@ const styles = StyleSheet.create({
   },
   avatarText: { fontSize: 18 },
 
+  // Notification Modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.4)",
+    justifyContent: "flex-end",
+  },
+  modalContainer: {
+    backgroundColor: "white",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: "75%",
+    paddingBottom: 30,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F0EBFF",
+  },
+  modalTitle: { fontSize: 16, fontWeight: "800", color: "#2D2D2D" },
+  modalClose: { fontSize: 18, color: "#7A7A8C", fontWeight: "700" },
+  emptyNotif: { alignItems: "center", padding: 40 },
+  emptyNotifIcon: { fontSize: 40, marginBottom: 10 },
+  emptyNotifText: { fontSize: 14, fontWeight: "700", color: "#7A7A8C" },
+  notifItem: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F9F7FF",
+    gap: 12,
+  },
+  notifItemUnread: { backgroundColor: "#F0F7FF" },
+  notifItemIcon: { fontSize: 24, width: 32, textAlign: "center" },
+  notifItemContent: { flex: 1 },
+  notifItemTitle: { fontSize: 13, fontWeight: "800", color: "#2D2D2D", marginBottom: 3 },
+  notifItemBody: { fontSize: 12, fontWeight: "600", color: "#7A7A8C", lineHeight: 18 },
+  notifItemTime: { fontSize: 10, color: "#BEB8D4", marginTop: 4 },
+  notifUnreadDot: {
+    width: 8,
+    height: 8,
+    backgroundColor: "#1A73E8",
+    borderRadius: 4,
+    marginTop: 6,
+  },
+
   scroll: { flex: 1 },
 
   progressBanner: {
@@ -347,38 +468,14 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     padding: 16,
   },
-  progressLabel: {
-    fontSize: 11,
-    color: "rgba(255,255,255,.8)",
-    marginBottom: 4,
-  },
-  progressTitle: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "white",
-    marginBottom: 10,
-  },
+  progressLabel: { fontSize: 11, color: "rgba(255,255,255,.8)", marginBottom: 4 },
+  progressTitle: { fontSize: 14, fontWeight: "700", color: "white", marginBottom: 10 },
   progressBarWrap: { flexDirection: "row", alignItems: "center", gap: 10 },
-  progressBar: {
-    flex: 1,
-    height: 7,
-    backgroundColor: "rgba(255,255,255,.2)",
-    borderRadius: 99,
-  },
-  progressFill: {
-    width: "42%",
-    height: "100%",
-    backgroundColor: "#FFD93D",
-    borderRadius: 99,
-  },
+  progressBar: { flex: 1, height: 7, backgroundColor: "rgba(255,255,255,.2)", borderRadius: 99 },
+  progressFill: { width: "42%", height: "100%", backgroundColor: "#FFD93D", borderRadius: 99 },
   progressText: { fontSize: 12, fontWeight: "700", color: "white" },
 
-  statsRow: {
-    flexDirection: "row",
-    gap: 10,
-    paddingHorizontal: 14,
-    marginBottom: 16,
-  },
+  statsRow: { flexDirection: "row", gap: 10, paddingHorizontal: 14, marginBottom: 16 },
   statCard: {
     flex: 1,
     backgroundColor: "white",
@@ -392,13 +489,7 @@ const styles = StyleSheet.create({
   statValue: { fontSize: 18, fontWeight: "700", color: "#202124" },
   statLabel: { fontSize: 10, color: "#5F6368", textAlign: "center" },
 
-  sectionTitle: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#202124",
-    paddingHorizontal: 14,
-    marginBottom: 10,
-  },
+  sectionTitle: { fontSize: 14, fontWeight: "700", color: "#202124", paddingHorizontal: 14, marginBottom: 10 },
   sectionHeader: {
     flexDirection: "row",
     alignItems: "center",
@@ -408,21 +499,8 @@ const styles = StyleSheet.create({
   },
   seeAll: { fontSize: 12, fontWeight: "600", color: "#1A73E8" },
 
-  subjectGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    paddingHorizontal: 14,
-    gap: 10,
-    marginBottom: 20,
-  },
-  subjectBtn: {
-    width: "47%",
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    padding: 14,
-    borderRadius: 12,
-  },
+  subjectGrid: { flexDirection: "row", flexWrap: "wrap", paddingHorizontal: 14, gap: 10, marginBottom: 20 },
+  subjectBtn: { width: "47%", flexDirection: "row", alignItems: "center", gap: 8, padding: 14, borderRadius: 12 },
   subjectIcon: { fontSize: 20 },
   subjectLabel: { fontSize: 13, fontWeight: "600", color: "white" },
 
@@ -438,67 +516,18 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#DADCE0",
   },
-  lessonIcon: {
-    width: 42,
-    height: 42,
-    backgroundColor: "#E8F0FE",
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  lessonIcon: { width: 42, height: 42, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   lessonIconText: { fontSize: 20 },
   lessonInfo: { flex: 1 },
-  lessonTitle: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#202124",
-    marginBottom: 3,
-  },
+  lessonTitle: { fontSize: 13, fontWeight: "600", color: "#202124", marginBottom: 3 },
   lessonMeta: { fontSize: 11, color: "#5F6368" },
-  lessonProg: { alignItems: "flex-end" },
-  lessonPct: { fontSize: 12, fontWeight: "700", color: "#1A73E8" },
-  lessonBar: {
-    width: 50,
-    height: 5,
-    backgroundColor: "#E8F0FE",
-    borderRadius: 99,
-    marginTop: 4,
-    overflow: "hidden",
-  },
-  lessonBarFill: {
-    height: "100%",
-    backgroundColor: "#1A73E8",
-    borderRadius: 99,
-  },
   lessonArrow: { fontSize: 24, color: "#C4BBDC", fontWeight: "700" },
 
-  quizCard: {
-    margin: 14,
-    backgroundColor: "#1A73E8",
-    borderRadius: 14,
-    padding: 16,
-  },
-  quizLabel: {
-    fontSize: 10,
-    color: "rgba(255,255,255,.8)",
-    marginBottom: 4,
-    textTransform: "uppercase",
-    letterSpacing: 0.8,
-  },
-  quizTitle: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "white",
-    marginBottom: 4,
-  },
+  quizCard: { margin: 14, backgroundColor: "#1A73E8", borderRadius: 14, padding: 16 },
+  quizLabel: { fontSize: 10, color: "rgba(255,255,255,.8)", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 },
+  quizTitle: { fontSize: 14, fontWeight: "700", color: "white", marginBottom: 4 },
   quizMeta: { fontSize: 11, color: "rgba(255,255,255,.8)", marginBottom: 14 },
-  btnQuiz: {
-    backgroundColor: "white",
-    borderRadius: 8,
-    paddingVertical: 8,
-    paddingHorizontal: 20,
-    alignSelf: "flex-start",
-  },
+  btnQuiz: { backgroundColor: "white", borderRadius: 8, paddingVertical: 8, paddingHorizontal: 20, alignSelf: "flex-start" },
   btnQuizText: { fontSize: 12, fontWeight: "700", color: "#1A73E8" },
 
   mentorCard: {
@@ -511,50 +540,17 @@ const styles = StyleSheet.create({
     borderColor: "#DADCE0",
     marginBottom: 24,
   },
-  mentorCardTitle: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#202124",
-    marginBottom: 12,
-  },
-  mentorRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    marginBottom: 8,
-  },
-  mentorAvatar: {
-    width: 44,
-    height: 44,
-    backgroundColor: "#E8F0FE",
-    borderRadius: 22,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  mentorCardTitle: { fontSize: 13, fontWeight: "700", color: "#202124", marginBottom: 12 },
+  mentorRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 8 },
+  mentorAvatar: { width: 44, height: 44, backgroundColor: "#E8F0FE", borderRadius: 22, alignItems: "center", justifyContent: "center" },
   mentorAvatarText: { fontSize: 22 },
   mentorName: { fontSize: 13, fontWeight: "700", color: "#202124" },
   mentorSub: { fontSize: 11, color: "#5F6368" },
-  onlineBadge: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: "#34A853",
-    marginBottom: 12,
-  },
-  btnMsg: {
-    backgroundColor: "#1A73E8",
-    borderRadius: 8,
-    paddingVertical: 10,
-    alignItems: "center",
-  },
+  onlineBadge: { fontSize: 11, fontWeight: "600", color: "#34A853", marginBottom: 12 },
+  btnMsg: { backgroundColor: "#1A73E8", borderRadius: 8, paddingVertical: 10, alignItems: "center" },
   btnMsgText: { fontSize: 13, fontWeight: "700", color: "white" },
 
-  bottomNav: {
-    flexDirection: "row",
-    backgroundColor: "white",
-    borderTopWidth: 1,
-    borderTopColor: "#DADCE0",
-    paddingVertical: 10,
-  },
+  bottomNav: { flexDirection: "row", backgroundColor: "white", borderTopWidth: 1, borderTopColor: "#DADCE0", paddingVertical: 10 },
   navBtn: { flex: 1, alignItems: "center", gap: 3 },
   navIcon: { fontSize: 20 },
   navLabel: { fontSize: 10, fontWeight: "600", color: "#5F6368" },

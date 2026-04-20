@@ -91,16 +91,6 @@ export default function ProfileScreen() {
               <Text style={styles.infoValue}>{user?.email}</Text>
             </View>
           </View>
-
-          <View style={styles.divider} />
-
-          <View style={styles.infoRow}>
-            <Text style={styles.infoIcon}>🎓</Text>
-            <View style={styles.infoContent}>
-              <Text style={styles.infoLabel}>Role</Text>
-              <Text style={styles.infoValue}>Learner</Text>
-            </View>
-          </View>
         </View>
 
         {/* Grade Level Card */}
