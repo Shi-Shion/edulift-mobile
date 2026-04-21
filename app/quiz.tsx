@@ -30,10 +30,20 @@ export default function QuizScreen() {
 
   const fetchQuiz = async () => {
     try {
+      console.log("=== QUIZ DEBUG ===");
+      console.log("lessonId received:", lessonId);
+      console.log("Fetching URL:", `/lessons/${lessonId}/quiz`);
+
       const res = await api.get(`/lessons/${lessonId}/quiz`);
+
+      console.log("Quiz response status:", res.status);
+      console.log("Quiz response data:", JSON.stringify(res.data));
+
       setQuiz(res.data);
     } catch (error: any) {
-      console.log("Quiz error:", error.response?.data);
+      console.log("Quiz fetch error status:", error.response?.status);
+      console.log("Quiz fetch error data:", JSON.stringify(error.response?.data));
+      console.log("Quiz fetch error message:", error.message);
     } finally {
       setLoading(false);
     }
