@@ -30,7 +30,7 @@ export default function LoginScreen() {
     try {
       const response = await api.post("/login", { email, password });
       const { token, grade_level } = response.data;
-      await setAuthToken(token);  // ← ADD await HERE
+      await setAuthToken(token);
 
       if (!grade_level) {
         router.replace("/onboarding");
@@ -100,6 +100,14 @@ export default function LoginScreen() {
             <Text style={styles.eyeBtn}>{showPassword ? "🙈" : "👁️"}</Text>
           </TouchableOpacity>
         </View>
+
+        {/* Forgot Password */}
+        <TouchableOpacity
+          style={styles.forgotWrap}
+          onPress={() => router.push("/forgot-password")}
+        >
+          <Text style={styles.forgotText}>Forgot Password? 🔑</Text>
+        </TouchableOpacity>
 
         {/* Login Button */}
         <TouchableOpacity
@@ -177,11 +185,13 @@ const styles = StyleSheet.create({
   },
   eyeBtn: { fontSize: 16, padding: 4 },
 
+  forgotWrap: { alignItems: "flex-end", marginTop: -8, marginBottom: 16 },
+  forgotText: { fontSize: 13, fontWeight: "800", color: "#FF6B35" },
+
   btnLogin: {
     borderRadius: 14,
     paddingVertical: 15,
     alignItems: "center",
-    marginTop: 8,
     marginBottom: 20,
     backgroundColor: "#FF6B35",
     shadowColor: "#FF6B35",

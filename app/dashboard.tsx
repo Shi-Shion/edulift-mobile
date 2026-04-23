@@ -1,8 +1,9 @@
 import { useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Alert,
   Modal,
+  RefreshControl,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -11,7 +12,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import api, { setAuthToken } from "./services/api";
+import api, { pingOnline, setAuthToken } from "./services/api";
 
 export default function DashboardScreen() {
   const router = useRouter();
@@ -19,15 +20,28 @@ export default function DashboardScreen() {
   const [user, setUser] = useState<any>(null);
   const [stats, setStats] = useState<any>(null);
   const [lessons, setLessons] = useState<any[]>([]);
+  const [totalLessons, setTotalLessons] = useState(0);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const pingInterval = useRef<any>(null);
 
   useEffect(() => {
     fetchData();
+
+    pingOnline();
+    pingInterval.current = setInterval(() => {
+      pingOnline();
+    }, 3 * 60 * 1000);
+
+    return () => {
+      if (pingInterval.current) clearInterval(pingInterval.current);
+    };
   }, []);
 
-  const fetchData = async () => {
+  const fetchData = async (isRefresh = false) => {
+    if (isRefresh) setRefreshing(true);
     try {
       const userRes = await api.get("/user");
       setUser(userRes.data);
@@ -41,6 +55,7 @@ export default function DashboardScreen() {
 
       try {
         const lessonsRes = await api.get("/lessons");
+        setTotalLessons(lessonsRes.data.length);
         setLessons(lessonsRes.data.slice(0, 3));
       } catch (e) {
         console.log("Lessons error:", e);
@@ -55,8 +70,14 @@ export default function DashboardScreen() {
       }
     } catch (error) {
       console.log("Error fetching data:", error);
+    } finally {
+      if (isRefresh) setRefreshing(false);
     }
   };
+
+  const onRefresh = useCallback(() => {
+    fetchData(true);
+  }, []);
 
   const handleOpenNotifications = async () => {
     setShowNotifications(true);
@@ -90,6 +111,7 @@ export default function DashboardScreen() {
           } catch (error) {
             // continue even if API fails
           } finally {
+            if (pingInterval.current) clearInterval(pingInterval.current);
             setAuthToken("");
             router.replace("/");
           }
@@ -107,6 +129,10 @@ export default function DashboardScreen() {
     Science: "#43A047",
     English: "#7B1FA2",
     Filipino: "#F4511E",
+    MAPEH: "#FF9800",
+    "Araling Panlipunan": "#0277BD",
+    TLE: "#6D4C41",
+    "Values Education": "#E91E63",
   };
 
   const SUBJECT_ICONS: any = {
@@ -114,6 +140,10 @@ export default function DashboardScreen() {
     Science: "🔬",
     English: "📖",
     Filipino: "🇵🇭",
+    MAPEH: "🎨",
+    "Araling Panlipunan": "🌍",
+    TLE: "🔧",
+    "Values Education": "❤️",
   };
 
   const subjects = [
@@ -121,6 +151,10 @@ export default function DashboardScreen() {
     { label: "Science", icon: "🔬", color: "#43A047" },
     { label: "English", icon: "📖", color: "#7B1FA2" },
     { label: "Filipino", icon: "🇵🇭", color: "#F4511E" },
+    { label: "MAPEH", icon: "🎨", color: "#FF9800" },
+    { label: "Araling Panlipunan", icon: "🌍", color: "#0277BD" },
+    { label: "TLE", icon: "🔧", color: "#6D4C41" },
+    { label: "Values Education", icon: "❤️", color: "#E91E63" },
   ];
 
   const getNotifIcon = (type: string) => {
@@ -202,26 +236,23 @@ export default function DashboardScreen() {
         </View>
       </Modal>
 
-      <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
-        {/* Progress Banner */}
-        <View style={styles.progressBanner}>
-          <Text style={styles.progressLabel}>Weekly Learning Progress</Text>
-          <Text style={styles.progressTitle}>
-            Keep it up! You're doing great 🎯
-          </Text>
-          <View style={styles.progressBarWrap}>
-            <View style={styles.progressBar}>
-              <View style={styles.progressFill} />
-            </View>
-            <Text style={styles.progressText}>42%</Text>
-          </View>
-        </View>
-
+      <ScrollView
+        style={styles.scroll}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={["#1A73E8"]}
+            tintColor="#1A73E8"
+          />
+        }
+      >
         {/* Stats */}
         <View style={styles.statsRow}>
           <View style={styles.statCard}>
             <Text style={styles.statIcon}>📚</Text>
-            <Text style={styles.statValue}>{lessons.length}</Text>
+            <Text style={styles.statValue}>{totalLessons}</Text>
             <Text style={styles.statLabel}>Lessons</Text>
           </View>
           <View style={styles.statCard}>
@@ -412,7 +443,6 @@ const styles = StyleSheet.create({
   },
   avatarText: { fontSize: 18 },
 
-  // Notification Modal
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.4)",
@@ -462,20 +492,7 @@ const styles = StyleSheet.create({
 
   scroll: { flex: 1 },
 
-  progressBanner: {
-    margin: 14,
-    backgroundColor: "#1558B0",
-    borderRadius: 14,
-    padding: 16,
-  },
-  progressLabel: { fontSize: 11, color: "rgba(255,255,255,.8)", marginBottom: 4 },
-  progressTitle: { fontSize: 14, fontWeight: "700", color: "white", marginBottom: 10 },
-  progressBarWrap: { flexDirection: "row", alignItems: "center", gap: 10 },
-  progressBar: { flex: 1, height: 7, backgroundColor: "rgba(255,255,255,.2)", borderRadius: 99 },
-  progressFill: { width: "42%", height: "100%", backgroundColor: "#FFD93D", borderRadius: 99 },
-  progressText: { fontSize: 12, fontWeight: "700", color: "white" },
-
-  statsRow: { flexDirection: "row", gap: 10, paddingHorizontal: 14, marginBottom: 16 },
+  statsRow: { flexDirection: "row", gap: 10, padding: 14, marginBottom: 6 },
   statCard: {
     flex: 1,
     backgroundColor: "white",

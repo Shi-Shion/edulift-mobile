@@ -1,11 +1,13 @@
 import { useRouter } from "expo-router";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
   KeyboardAvoidingView,
   Platform,
+  RefreshControl,
   SafeAreaView,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -25,13 +27,15 @@ export default function MentorChatScreen() {
   const [messages, setMessages] = useState<any[]>([]);
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [sending, setSending] = useState(false);
 
   useEffect(() => {
     loadData();
   }, []);
 
-  const loadData = async () => {
+  const loadData = async (isRefresh = false) => {
+    if (isRefresh) setRefreshing(true);
     try {
       const [userRes, mentorRes, messagesRes] = await Promise.all([
         api.get("/user"),
@@ -45,8 +49,13 @@ export default function MentorChatScreen() {
       console.log("Chat load error:", error);
     } finally {
       setLoading(false);
+      if (isRefresh) setRefreshing(false);
     }
   };
+
+  const onRefresh = useCallback(() => {
+    loadData(true);
+  }, []);
 
   const sendMessage = async () => {
     if (!text.trim() || sending) return;
@@ -86,13 +95,23 @@ export default function MentorChatScreen() {
           <Text style={styles.headerTitle}>Mentor Chat</Text>
           <View style={{ width: 36 }} />
         </View>
-        <View style={styles.centered}>
+        <ScrollView
+          contentContainerStyle={styles.centered}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={["#1A73E8"]}
+              tintColor="#1A73E8"
+            />
+          }
+        >
           <Text style={styles.emptyIcon}>🧑‍🏫</Text>
           <Text style={styles.emptyTitle}>No Mentor Assigned</Text>
           <Text style={styles.emptySub}>
             Please wait for an admin to assign a mentor to you.
           </Text>
-        </View>
+        </ScrollView>
       </SafeAreaView>
     );
   }
@@ -123,13 +142,23 @@ export default function MentorChatScreen() {
         keyboardVerticalOffset={90}
       >
         {messages.length === 0 ? (
-          <View style={styles.centered}>
+          <ScrollView
+            contentContainerStyle={styles.centered}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                colors={["#1A73E8"]}
+                tintColor="#1A73E8"
+              />
+            }
+          >
             <Text style={styles.emptyIcon}>💬</Text>
             <Text style={styles.emptyTitle}>No messages yet</Text>
             <Text style={styles.emptySub}>
               Say hi to your mentor and start learning!
             </Text>
-          </View>
+          </ScrollView>
         ) : (
           <FlatList
             ref={flatListRef}
@@ -137,6 +166,14 @@ export default function MentorChatScreen() {
             keyExtractor={(item) => item.id.toString()}
             contentContainerStyle={styles.messagesList}
             showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                colors={["#1A73E8"]}
+                tintColor="#1A73E8"
+              />
+            }
             onContentSizeChange={() =>
               flatListRef.current?.scrollToEnd({ animated: false })
             }

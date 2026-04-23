@@ -41,6 +41,10 @@ export default function RegisterScreen() {
       Alert.alert("Error", "Please fill in all fields.");
       return;
     }
+    if (password.length < 8 || password.length > 12) {
+      Alert.alert("Error", "Password must be 8–12 characters.");
+      return;
+    }
     if (password !== passwordConfirm) {
       Alert.alert("Error", "Passwords do not match.");
       return;
@@ -72,18 +76,13 @@ export default function RegisterScreen() {
         payload.course = course;
       }
 
-      await api.post("/register", payload);
+      const res = await api.post("/register", payload);
 
-      if (role === "mentor") {
-        Alert.alert(
-          "Application Submitted! 🎉",
-          "Your mentor application has been submitted. Please wait for admin approval before logging in.",
-          [{ text: "OK", onPress: () => router.replace("/") }]
-        );
-      } else {
-        Alert.alert("Success", "Account created! Please log in.");
-        router.replace("/");
-      }
+      // Redirect to email verification screen for both roles
+      router.push({
+        pathname: "/verify-email",
+        params: { email: res.data.email, role: res.data.role },
+      });
     } catch (error: any) {
       console.log("Registration error:", error.response?.data);
       Alert.alert(
@@ -161,7 +160,7 @@ export default function RegisterScreen() {
             placeholder="Your full name"
             placeholderTextColor="#BEB8D4"
             value={name}
-            onChangeText={setName}
+            onChangeText={(text) => setName(text.replace(/[0-9]/g, ''))}
           />
         </View>
 
@@ -191,11 +190,13 @@ export default function RegisterScreen() {
             secureTextEntry={!showPassword}
             value={password}
             onChangeText={setPassword}
+            maxLength={12}
           />
           <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeBtn}>
             <Text style={styles.eyeIcon}>{showPassword ? "🙈" : "👁️"}</Text>
           </TouchableOpacity>
         </View>
+        <Text style={styles.hint}>Min 8, Max 12 characters</Text>
 
         {/* Confirm Password */}
         <Text style={styles.label}>Confirm Password</Text>
@@ -208,6 +209,7 @@ export default function RegisterScreen() {
             secureTextEntry={!showPasswordConfirm}
             value={passwordConfirm}
             onChangeText={setPasswordConfirm}
+            maxLength={12}
           />
           <TouchableOpacity onPress={() => setShowPasswordConfirm(!showPasswordConfirm)} style={styles.eyeBtn}>
             <Text style={styles.eyeIcon}>{showPasswordConfirm ? "🙈" : "👁️"}</Text>
@@ -386,6 +388,14 @@ const styles = StyleSheet.create({
   },
 
   label: { fontSize: 13, fontWeight: "700", color: "#2D2D2D", marginBottom: 6 },
+  hint: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#9B9BAD",
+    marginTop: -10,
+    marginBottom: 16,
+    marginLeft: 4,
+  },
   inputWrap: {
     flexDirection: "row",
     alignItems: "center",

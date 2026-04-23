@@ -29,4 +29,13 @@ export const clearAuthToken = async () => {
   delete api.defaults.headers.common["Authorization"];
 };
 
+// Ping the server to update last_seen_at
+export const pingOnline = async () => {
+  try {
+    await api.post("/ping");
+  } catch (e) {
+    // Silently fail — don't interrupt the app
+  }
+};
+
 export default api;

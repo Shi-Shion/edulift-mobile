@@ -1,8 +1,9 @@
 import { useRouter, useLocalSearchParams } from "expo-router";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import {
   ActivityIndicator,
   FlatList,
+  RefreshControl,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -19,6 +20,10 @@ const SUBJECTS = [
   { label: "Science", icon: "🔬", color: "#43A047" },
   { label: "English", icon: "📖", color: "#7B1FA2" },
   { label: "Filipino", icon: "🇵🇭", color: "#F4511E" },
+  { label: "MAPEH", icon: "🎨", color: "#FF9800" },
+  { label: "Araling Panlipunan", icon: "🌍", color: "#0277BD" },
+  { label: "TLE", icon: "🔧", color: "#6D4C41" },
+  { label: "Values Education", icon: "❤️", color: "#E91E63" },
 ];
 
 export default function LessonsScreen() {
@@ -28,41 +33,52 @@ export default function LessonsScreen() {
   const [lessons, setLessons] = useState<any[]>([]);
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [activeSubject, setActiveSubject] = useState<any>(params.subject || "All");
 
+  // On mount: fetch user first, then lessons will fire via useEffect below
   useEffect(() => {
-    fetchUserAndLessons();
+    fetchUser();
   }, []);
 
+  // Re-fetch lessons whenever user or activeSubject changes
   useEffect(() => {
     if (user) fetchLessons();
-  }, [activeSubject]);
+  }, [activeSubject, user]);
 
-  const fetchUserAndLessons = async () => {
+  const fetchUser = async () => {
     try {
       const res = await api.get("/user");
       setUser(res.data);
-      console.log("User grade:", res.data.grade_level);
-      fetchLessons();
     } catch (error) {
       console.log("Error fetching user:", error);
     }
   };
 
-  const fetchLessons = async () => {
-    setLoading(true);
+  const fetchLessons = async (isRefresh = false) => {
+    if (isRefresh) {
+      setRefreshing(true);
+    } else {
+      setLoading(true);
+    }
     try {
-      const params: any = {};
-      if (activeSubject !== "All") params.subject = activeSubject;
-      const res = await api.get("/lessons", { params });
+      const queryParams: any = {};
+      if (activeSubject !== "All") queryParams.subject = activeSubject;
+      const res = await api.get("/lessons", { params: queryParams });
       console.log("Lessons count:", res.data.length);
       setLessons(res.data);
     } catch (error: any) {
       console.log("Error fetching lessons:", error.response?.data);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
+
+  // Pull-to-refresh handler
+  const onRefresh = useCallback(() => {
+    fetchLessons(true);
+  }, [activeSubject]);
 
   const getSubjectColor = (subject: string) =>
     SUBJECTS.find((s) => s.label === subject)?.color || "#7A7A8C";
@@ -126,20 +142,45 @@ export default function LessonsScreen() {
           <Text style={styles.loadingText}>Loading lessons...</Text>
         </View>
       ) : lessons.length === 0 ? (
-        <View style={styles.emptyWrap}>
-          <Text style={styles.emptyIcon}>📭</Text>
-          <Text style={styles.emptyTitle}>No lessons found</Text>
-          <Text style={styles.emptySub}>
-            No {activeSubject === "All" ? "" : activeSubject + " "}lessons
-            available for {user?.grade_level ?? "your grade"}.
-          </Text>
-        </View>
+        <FlatList
+          data={[]}
+          keyExtractor={() => "empty"}
+          renderItem={() => null}
+          contentContainerStyle={styles.emptyWrap}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={["#FF6B35"]}
+              tintColor="#FF6B35"
+            />
+          }
+          ListEmptyComponent={
+            <View style={styles.emptyInner}>
+              <Text style={styles.emptyIcon}>📭</Text>
+              <Text style={styles.emptyTitle}>No lessons found</Text>
+              <Text style={styles.emptySub}>
+                No {activeSubject === "All" ? "" : activeSubject + " "}lessons
+                available for {user?.grade_level ?? "your grade"}.
+              </Text>
+              <Text style={styles.pullHint}>Pull down to refresh</Text>
+            </View>
+          }
+        />
       ) : (
         <FlatList
           data={lessons}
           keyExtractor={(item) => item.id.toString()}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={["#FF6B35"]}
+              tintColor="#FF6B35"
+            />
+          }
           renderItem={({ item }) => (
             <TouchableOpacity
               style={styles.lessonCard}
@@ -235,7 +276,8 @@ const styles = StyleSheet.create({
   },
   loadingText: { fontSize: 14, fontWeight: "600", color: "#7A7A8C" },
 
-  emptyWrap: {
+  emptyWrap: { flex: 1 },
+  emptyInner: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
@@ -249,6 +291,12 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#7A7A8C",
     textAlign: "center",
+  },
+  pullHint: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#C4BBDC",
+    marginTop: 8,
   },
 
   listContent: { padding: 16, gap: 12 },

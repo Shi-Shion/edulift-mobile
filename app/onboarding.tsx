@@ -26,7 +26,7 @@ const LEVELS = [
     sub: "Grades 7–10",
   },
   {
-    label: "Senior High",
+    label: "Senior High School",
     icon: "🏛️",
     color: "#00C9A7",
     sub: "Grades 11–12",

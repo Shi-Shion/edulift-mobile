@@ -1,7 +1,8 @@
 import { useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
     ActivityIndicator,
+    RefreshControl,
     SafeAreaView,
     ScrollView,
     StyleSheet,
@@ -15,12 +16,14 @@ export default function ProfileScreen() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     fetchUser();
   }, []);
 
-  const fetchUser = async () => {
+  const fetchUser = async (isRefresh = false) => {
+    if (isRefresh) setRefreshing(true);
     try {
       const response = await api.get("/user");
       setUser(response.data);
@@ -28,8 +31,13 @@ export default function ProfileScreen() {
       console.log("Error fetching user:", error);
     } finally {
       setLoading(false);
+      if (isRefresh) setRefreshing(false);
     }
   };
+
+  const onRefresh = useCallback(() => {
+    fetchUser(true);
+  }, []);
 
   if (loading) {
     return (
@@ -55,6 +63,14 @@ export default function ProfileScreen() {
       <ScrollView
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={["#FF6B35"]}
+            tintColor="#FF6B35"
+          />
+        }
       >
         {/* Avatar */}
         <View style={styles.avatarSection}>
