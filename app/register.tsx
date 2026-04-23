@@ -76,13 +76,21 @@ export default function RegisterScreen() {
         payload.course = course;
       }
 
-      const res = await api.post("/register", payload);
+      await api.post("/register", payload);
 
-      // Redirect to email verification screen for both roles
-      router.push({
-        pathname: "/verify-email",
-        params: { email: res.data.email, role: res.data.role },
-      });
+      if (role === "mentor") {
+        Alert.alert(
+          "Application Submitted! 📋",
+          "Your mentor application is pending admin approval. You'll be able to log in once approved.",
+          [{ text: "OK", onPress: () => router.replace("/") }]
+        );
+      } else {
+        Alert.alert(
+          "Registration Successful! 🎉",
+          "Your account has been created. You can now log in.",
+          [{ text: "Log In", onPress: () => router.replace("/") }]
+        );
+      }
     } catch (error: any) {
       console.log("Registration error:", error.response?.data);
       Alert.alert(
@@ -345,7 +353,6 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
 
-  // Role toggle
   roleToggleWrap: {
     flexDirection: "row",
     borderRadius: 12,
@@ -372,7 +379,6 @@ const styles = StyleSheet.create({
     color: "#fff",
   },
 
-  // Mentor notice
   mentorNotice: {
     backgroundColor: "#FFF3CD",
     borderRadius: 10,
@@ -417,7 +423,6 @@ const styles = StyleSheet.create({
   eyeBtn: { padding: 4 },
   eyeIcon: { fontSize: 17 },
 
-  // Dropdown
   dropdown: {
     borderWidth: 2,
     borderColor: "#E8E0FF",
