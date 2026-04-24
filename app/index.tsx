@@ -37,8 +37,21 @@ export default function LoginScreen() {
       } else {
         router.replace("/dashboard");
       }
-    } catch (error) {
-      Alert.alert("Login Failed", "Invalid email or password.");
+    } catch (error: any) {
+      const message = error.response?.data?.message || "Invalid email or password.";
+      const isDeactivated = message.toLowerCase().includes("deactivated");
+      const isPending = message.toLowerCase().includes("approval");
+      const isInvalid = message.toLowerCase().includes("invalid");
+
+      const title = isDeactivated
+        ? "Account Deactivated 🚫"
+        : isPending
+        ? "Pending Approval ⏳"
+        : isInvalid
+        ? "Invalid Credentials ❌"
+        : "Login Failed";
+
+      Alert.alert(title, message);
     } finally {
       setLoading(false);
     }
